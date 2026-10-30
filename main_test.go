@@ -18,18 +18,22 @@ func TestRun(t *testing.T) {
 			name:     "good file passes",
 			args:     []string{"-env", "testdata/good.env", "-example", "testdata/app.env.example"},
 			code:     0,
-			inStderr: "ok: 5 keys checked",
+			inStderr: "ok: 8 keys checked",
 		},
 		{
 			name: "bad file fails",
 			args: []string{"-env", "testdata/bad.env", "-example", "testdata/app.env.example"},
 			code: 1,
-			stdout: `testdata/bad.env:3: error: SECRET_KEY is empty
-testdata/bad.env:5: warning: OLD_FLAG is not in testdata/app.env.example
-testdata/bad.env:6: error: PORT is set more than once (first on line 2)
-testdata/app.env.example:4: error: DATABASE_URL is missing from testdata/bad.env
+			stdout: `testdata/bad.env:3: error: DEBUG should be a boolean like true or false
+testdata/bad.env:4: error: SECRET_KEY is empty
+testdata/bad.env:5: error: ADMIN_EMAIL should be an email address
+testdata/bad.env:6: error: LOG_LEVEL should be one of debug, info, warn, error
+testdata/bad.env:7: warning: OLD_FLAG is not in testdata/app.env.example
+testdata/bad.env:8: error: PORT is set more than once (first on line 2)
+testdata/bad.env:8: error: PORT should be a whole number
+testdata/app.env.example:5: error: DATABASE_URL is missing from testdata/bad.env
 `,
-			inStderr: "3 errors, 1 warning",
+			inStderr: "7 errors, 1 warning",
 		},
 		{
 			name:     "syntax error",

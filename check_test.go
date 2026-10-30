@@ -37,6 +37,16 @@ func TestCheck(t *testing.T) {
 		{"duplicate in example", "A=1", "A=\nA=", []string{"error duplicate A ex:2"}},
 		{"duplicate extra reported once", "Z=1\nZ=2", "", []string{"error duplicate Z env:2", "warning extra Z env:2"}},
 		{"empty files", "", "", nil},
+		{"optional key may be missing", "A=1", "A=\nB= # optional", nil},
+		{"optional key may be empty", "A=1\nB=", "A=\nB= # optional url", nil},
+		{"optional value is still checked", "B=not-a-url", "B= # optional url", []string{"error invalid B env:1"}},
+		{"empty required value is not type checked", "PORT=", "PORT=8080 # int", []string{"error empty PORT env:1"}},
+		{
+			"values checked against hints",
+			"PORT=80a\nLEVEL=verbose\nDEBUG=true\nNOTE=hi",
+			"PORT=8080 # int\nLEVEL=info # one of: debug,info\nDEBUG=false # bool\nNOTE= # free text, ask the team",
+			[]string{"error invalid PORT env:1", "error invalid LEVEL env:2"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

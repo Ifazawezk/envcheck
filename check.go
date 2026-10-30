@@ -13,7 +13,7 @@ const (
 // Issue is one problem found when comparing a .env file to its example.
 type Issue struct {
 	Severity Severity
-	Kind     string // missing, extra, empty or duplicate
+	Kind     string // missing, extra, empty, duplicate or invalid
 	Key      string
 	File     string // the file the issue points at
 	Line     int
@@ -49,12 +49,19 @@ func Check(env, example []Entry, opt Options) []Issue {
 		if have[e.Key] != e {
 			continue // a later line sets this key again
 		}
-		if _, ok := want[e.Key]; !ok {
+		spec, ok := want[e.Key]
+		if !ok {
 			add(SevWarning, "extra", e, opt.EnvPath, fmt.Sprintf("%s is not in %s", e.Key, opt.ExamplePath))
 			continue
 		}
-		if e.Value == "" {
-			add(SevError, "empty", e, opt.EnvPath, e.Key+" is empty")
+		h := ParseHint(spec.Comment)
+		switch {
+		case e.Value == "":
+			if !h.Optional {
+				add(SevError, "empty", e, opt.EnvPath, e.Key+" is empty")
+			}
+		case !h.Valid(e.Value):
+			add(SevError, "invalid", e, opt.EnvPath, fmt.Sprintf("%s should be %s", e.Key, h.Want()))
 		}
 	}
 
@@ -68,7 +75,7 @@ func Check(env, example []Entry, opt Options) []Issue {
 		if want[s.Key] != s {
 			continue
 		}
-		if _, ok := have[s.Key]; !ok {
+		if _, ok := have[s.Key]; !ok && !ParseHint(s.Comment).Optional {
 			add(SevError, "missing", s, opt.ExamplePath, fmt.Sprintf("%s is missing from %s", s.Key, opt.EnvPath))
 		}
 	}

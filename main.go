@@ -1,5 +1,6 @@
 // envcheck checks a .env file against .env.example: missing keys, keys the
-// example does not know about, empty values and duplicate keys.
+// example does not know about, empty values, duplicate keys and values that
+// do not match the type hints written as comments in the example.
 package main
 
 import (
