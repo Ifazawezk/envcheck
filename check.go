@@ -12,23 +12,27 @@ const (
 
 // Issue is one problem found when comparing a .env file to its example.
 type Issue struct {
-	Severity Severity
-	Kind     string // missing, extra, empty, duplicate or invalid
-	Key      string
-	File     string // the file the issue points at
-	Line     int
-	Message  string
+	Severity Severity `json:"severity"`
+	Kind     string   `json:"kind"` // missing, extra, empty, duplicate or invalid
+	Key      string   `json:"key"`
+	File     string   `json:"file"` // the file the issue points at
+	Line     int      `json:"line"`
+	Message  string   `json:"message"`
+	Value    string   `json:"value,omitempty"` // masked, only for invalid values
 }
 
-// Options names the two files, so issues can point at the right one.
+// Options names the two files, so issues can point at the right one. With
+// Strict set, keys that the example does not list are errors, not warnings.
 type Options struct {
 	EnvPath     string
 	ExamplePath string
+	Strict      bool
 }
 
 // Check compares the entries of a .env file with those of .env.example.
 // When a key is set more than once the last assignment is the one checked,
-// since that is the value most loaders end up using.
+// since that is the value most loaders end up using. Values never appear in
+// issues unmasked.
 // Issues in the .env file come first, in line order, then issues that point
 // at the example (duplicates and keys missing from .env), also in line order.
 func Check(env, example []Entry, opt Options) []Issue {
@@ -51,7 +55,11 @@ func Check(env, example []Entry, opt Options) []Issue {
 		}
 		spec, ok := want[e.Key]
 		if !ok {
-			add(SevWarning, "extra", e, opt.EnvPath, fmt.Sprintf("%s is not in %s", e.Key, opt.ExamplePath))
+			sev := SevWarning
+			if opt.Strict {
+				sev = SevError
+			}
+			add(sev, "extra", e, opt.EnvPath, fmt.Sprintf("%s is not in %s", e.Key, opt.ExamplePath))
 			continue
 		}
 		h := ParseHint(spec.Comment)
@@ -61,7 +69,9 @@ func Check(env, example []Entry, opt Options) []Issue {
 				add(SevError, "empty", e, opt.EnvPath, e.Key+" is empty")
 			}
 		case !h.Valid(e.Value):
-			add(SevError, "invalid", e, opt.EnvPath, fmt.Sprintf("%s should be %s", e.Key, h.Want()))
+			masked := Mask(e.Value)
+			add(SevError, "invalid", e, opt.EnvPath, fmt.Sprintf("%s should be %s (got %q)", e.Key, h.Want(), masked))
+			issues[len(issues)-1].Value = masked
 		}
 	}
 
@@ -92,6 +102,18 @@ func Count(issues []Issue) (errs, warns int) {
 		}
 	}
 	return errs, warns
+}
+
+// Mask hides a value so it can be shown in output. Values shorter than 8
+// characters are hidden completely; longer ones keep their first two
+// characters, which is usually enough to tell which value is meant. The
+// number of stars is always the same, so the length is not given away.
+func Mask(v string) string {
+	r := []rune(v)
+	if len(r) < 8 {
+		return "****"
+	}
+	return string(r[:2]) + "****"
 }
 
 func lastByKey(entries []Entry) map[string]Entry {
