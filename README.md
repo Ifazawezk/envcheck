@@ -91,14 +91,15 @@ A hint is a comment at the end of a line in `.env.example`. Leave a space before
 
 | Hint | Accepts |
 |---|---|
-| `# int` | whole numbers like `8080` or `-1` |
-| `# bool` | `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`, in any case |
+| `# int` or `# integer` | whole numbers like `8080` or `-1` |
+| `# bool` or `# boolean` | `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`, in any case |
 | `# url` | an absolute URL with a scheme and host, like `https://api.example.com` or `postgres://user:pass@db:5432/app` |
 | `# email` | a plain address like `ops@example.com` |
 | `# one of: debug,info,warn,error` | exactly one of the listed values (case sensitive) |
 | `# optional` | the key may be missing or empty |
+| `# required` | changes nothing, since keys are required unless marked optional, but it can sit next to a type: `# required int` |
 
-`optional` can be combined with a type: `# optional url`, `# int, optional` or `# optional, one of: eu,us`. Put `optional` before `one of:`, because everything after the colon is read as the list of allowed values.
+`optional` can be combined with a type: `# optional url`, `# int, optional` or `# optional, one of: eu,us`. Put `optional` before `one of:`, because everything after the colon is read as the list of allowed values. Hint words can be in any case.
 
 An empty value is never type checked. If the key is required it is reported as empty, and if it is optional it is fine.
 
@@ -110,14 +111,25 @@ A comment that is not made only of hint words, such as `# ask the ops team for t
 - full-line `#` comments and blank lines
 - inline comments after unquoted values, like `PORT=8080 # the port`. The `#` needs a space before it, so `COLOR=#fff` and `PASS=abc#123` keep the `#`
 - single quotes, taken literally: `'no \n escapes here'`
-- double quotes with `\n`, `\r`, `\t`, `\"`, `\\` and `\$` escapes. They can span several lines, which is handy for private keys and certificates
+- double quotes with `\n`, `\r`, `\t`, `\"`, `\\` and `\$` escapes
+- both kinds of quotes can span several lines, which is handy for private keys and certificates
 - Windows line endings and a UTF-8 byte order mark
+
+Files must be UTF-8. UTF-16, which `>` and `>>` write in Windows PowerShell 5.1, is reported as a syntax error on the line where it starts, because most loaders can't read it either.
 
 Keys can contain letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded; the text is checked as written.
 
 ## Values are never printed
 
 The output contains key names, file names and line numbers, never values. When a value fails a type check it is shown masked: values shorter than 8 characters become `****`, and longer ones keep only their first two characters, like `sk****`. The number of stars is always the same, so the length isn't given away either. Syntax errors don't echo the offending line, in case a secret was pasted on a line of its own.
+
+A secret on its own line can also look like a key: `dGhpc3Rva2Vu==` is valid `KEY=value` syntax. So a name that isn't in `.env.example` is masked in the same way if it is at least 12 characters long and either mixes upper and lower case or has digits but no underscore:
+
+```
+.env:6: warning: dG**** is not in .env.example (name hidden, this line looks like a pasted secret)
+```
+
+Names like `DATABASE_URL`, `http_proxy` and `S3_BUCKET_NAME_2` are shown as usual, and so is any name the example lists. This is a check on the shape of the name, so it can't catch everything: a short token, or one that is all one case with no digits, is still printed as a name. Rotate any secret that has reached a log.
 
 ## JSON output
 
