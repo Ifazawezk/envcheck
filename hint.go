@@ -3,6 +3,7 @@ package main
 import (
 	"net/mail"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -18,6 +19,7 @@ import (
 //
 // "optional" can be combined with any type. Put it before "one of:",
 // since everything after the colon is read as the list of allowed values.
+// "required" is accepted too, but changes nothing: keys are required anyway.
 type Hint struct {
 	Optional bool
 	Type     string   // "", "int", "bool", "url" or "email"
@@ -30,8 +32,8 @@ type Hint struct {
 func ParseHint(comment string) Hint {
 	s := strings.TrimSpace(comment)
 	var h Hint
-	if before, list, ok := strings.Cut(s, "one of:"); ok {
-		for _, v := range strings.Split(list, ",") {
+	if loc := oneOfWord.FindStringIndex(s); loc != nil {
+		for _, v := range strings.Split(s[loc[1]:], ",") {
 			if v = strings.TrimSpace(v); v != "" {
 				h.OneOf = append(h.OneOf, v)
 			}
@@ -39,24 +41,37 @@ func ParseHint(comment string) Hint {
 		if len(h.OneOf) == 0 {
 			return Hint{}
 		}
-		s = before
+		s = s[:loc[0]]
 	}
 	words := strings.FieldsFunc(s, func(r rune) bool { return r == ' ' || r == '\t' || r == ',' })
 	for _, w := range words {
-		switch w = strings.ToLower(w); w {
-		case "optional":
+		w = strings.ToLower(w)
+		if w == "required" {
+			continue
+		}
+		if w == "optional" {
 			h.Optional = true
-		case "int", "bool", "url", "email":
-			if h.Type != "" || h.OneOf != nil {
-				return Hint{}
-			}
-			h.Type = w
-		default:
+			continue
+		}
+		typ, ok := typeWords[w]
+		if !ok || h.Type != "" || h.OneOf != nil {
 			return Hint{}
 		}
+		h.Type = typ
 	}
 	return h
 }
+
+// A hint with a word it doesn't know counts as a plain comment, which turns the
+// check off without saying so. These cover the other ways people write a hint.
+var (
+	oneOfWord = regexp.MustCompile(`(?i)one of:`)
+	typeWords = map[string]string{
+		"int": "int", "integer": "int",
+		"bool": "bool", "boolean": "bool",
+		"url": "url", "email": "email",
+	}
+)
 
 // Valid reports whether a non-empty value matches the hint.
 func (h Hint) Valid(v string) bool {

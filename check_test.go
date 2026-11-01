@@ -43,6 +43,12 @@ func TestCheck(t *testing.T) {
 		{"optional value is still checked", "B=not-a-url", "B= # optional url", []string{"error invalid B env:1"}},
 		{"empty required value is not type checked", "PORT=", "PORT=8080 # int", []string{"error empty PORT env:1"}},
 		{
+			"other ways of writing a hint still check the value",
+			"A=x\nB=z\nC=x\nD=maybe",
+			"A= # required int\nB= # One of: x,y\nC= # integer\nD= # boolean",
+			[]string{"error invalid A env:1", "error invalid B env:2", "error invalid C env:3", "error invalid D env:4"},
+		},
+		{
 			"values checked against hints",
 			"PORT=80a\nLEVEL=verbose\nDEBUG=true\nNOTE=hi",
 			"PORT=8080 # int\nLEVEL=info # one of: debug,info\nDEBUG=false # bool\nNOTE= # free text, ask the team",
