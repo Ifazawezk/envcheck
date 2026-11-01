@@ -47,6 +47,13 @@ func ParseFile(path string) ([]Entry, error) {
 // Error messages never include values, since they are often secrets.
 func Parse(src string) ([]Entry, error) {
 	src = strings.TrimPrefix(src, "\xef\xbb\xbf") // UTF-8 byte order mark
+	// Windows PowerShell's > writes UTF-16, and its >> can add UTF-16 to the end
+	// of a UTF-8 file, so the NUL bytes may start on any line.
+	nul := strings.IndexByte(src, 0)
+	if nul >= 0 || strings.HasPrefix(src, "\xff\xfe") || strings.HasPrefix(src, "\xfe\xff") {
+		line := strings.Count(src[:max(nul, 0)], "\n") + 1
+		return nil, &ParseError{line, "this looks like UTF-16 text, save the file as UTF-8"}
+	}
 	src = strings.ReplaceAll(src, "\r\n", "\n")
 	lines := strings.Split(src, "\n")
 

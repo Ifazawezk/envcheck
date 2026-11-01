@@ -68,6 +68,10 @@ func TestParseErrors(t *testing.T) {
 		{"A='open", 1, "missing closing single quote"},
 		{"A=1\nB='never closed\nC=3", 2, "missing closing single quote"},
 		{"A='one\ntwo' extra", 2, "unexpected text after closing quote"},
+		{"\xff\xfeA\x00=\x001\x00\r\x00\n\x00", 1, "UTF-16"},
+		{"\xfe\xff\x00A\x00=\x001", 1, "UTF-16"},
+		{"\xff\xfe\x45\x06\x47\x06", 1, "UTF-16"}, // Arabic text has no NUL bytes
+		{"A=1\nB=2\nC\x00=\x003\x00", 3, "UTF-16"},
 		{"A=\"x\"y", 1, "unexpected text after closing quote"},
 		{"A=\"one\ntwo\" extra", 2, "unexpected text after closing quote"},
 	}

@@ -114,6 +114,8 @@ A comment that is not made only of hint words, such as `# ask the ops team for t
 - both kinds of quotes can span several lines, which is handy for private keys and certificates
 - Windows line endings and a UTF-8 byte order mark
 
+Files must be UTF-8. UTF-16, which `>` and `>>` write in Windows PowerShell 5.1, is reported as a syntax error on the line where it starts, because most loaders can't read it either.
+
 Keys can contain letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded; the text is checked as written.
 
 ## Values are never printed
