@@ -30,7 +30,15 @@ func TestParse(t *testing.T) {
 			"KEY=\"-----BEGIN-----\nabc  \n-----END-----\"\nNEXT=1",
 			[]Entry{{Key: "KEY", Value: "-----BEGIN-----\nabc  \n-----END-----", Line: 1}, {Key: "NEXT", Value: "1", Line: 4}},
 		},
-		{"windows line endings", "A=1\r\nB=\"x\r\ny\"\r\n", []Entry{{Key: "A", Value: "1", Line: 1}, {Key: "B", Value: "x\ny", Line: 2}}},
+		{
+			"multi-line single quotes",
+			"KEY='-----BEGIN-----\nabc  \n-----END-----'\nNEXT=1",
+			[]Entry{{Key: "KEY", Value: "-----BEGIN-----\nabc  \n-----END-----", Line: 1}, {Key: "NEXT", Value: "1", Line: 4}},
+		},
+		{"multi-line single quotes are literal", "A='x \\n\n\"y\" # z'", []Entry{{Key: "A", Value: "x \\n\n\"y\" # z", Line: 1}}},
+		{"comment after multi-line single quotes", "A='x\ny' # note\nB=2", []Entry{{Key: "A", Value: "x\ny", Comment: "note", Line: 1}, {Key: "B", Value: "2", Line: 3}}},
+		{"single quote with blank lines inside", "A='x\n\n\ny'", []Entry{{Key: "A", Value: "x\n\n\ny", Line: 1}}},
+		{"windows line endings", "A=1\r\nB=\"x\r\ny\"\r\nC='p\r\nq'\r\n", []Entry{{Key: "A", Value: "1", Line: 1}, {Key: "B", Value: "x\ny", Line: 2}, {Key: "C", Value: "p\nq", Line: 4}}},
 		{"byte order mark", "\xef\xbb\xbfA=1", []Entry{{Key: "A", Value: "1", Line: 1}}},
 	}
 	for _, tt := range tests {
@@ -58,6 +66,8 @@ func TestParseErrors(t *testing.T) {
 		{"=x", 1, "invalid key name"},
 		{"A=1\nB=\"never closed\nC=3", 2, "missing closing double quote"},
 		{"A='open", 1, "missing closing single quote"},
+		{"A=1\nB='never closed\nC=3", 2, "missing closing single quote"},
+		{"A='one\ntwo' extra", 2, "unexpected text after closing quote"},
 		{"A=\"x\"y", 1, "unexpected text after closing quote"},
 		{"A=\"one\ntwo\" extra", 2, "unexpected text after closing quote"},
 	}

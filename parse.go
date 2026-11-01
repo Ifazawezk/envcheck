@@ -41,8 +41,9 @@ func ParseFile(path string) ([]Entry, error) {
 }
 
 // Parse reads .env syntax: KEY=value lines, optional "export " prefixes,
-// # comments, single quotes (taken literally), double quotes (with escapes,
-// may span several lines) and inline comments after unquoted values.
+// # comments, single quotes (taken literally), double quotes (with escapes),
+// both of which may span several lines, and inline comments after unquoted
+// values.
 // Error messages never include values, since they are often secrets.
 func Parse(src string) ([]Entry, error) {
 	src = strings.TrimPrefix(src, "\xef\xbb\xbf") // UTF-8 byte order mark
@@ -71,21 +72,21 @@ func Parse(src string) ([]Entry, error) {
 		e := Entry{Key: key, Line: start}
 		trimmed := strings.TrimLeft(raw, " \t")
 		var rest string
+		var end int
+		var err error
 		switch {
 		case strings.HasPrefix(trimmed, `"`):
-			var end int
-			var err error
 			e.Value, rest, end, err = doubleQuoted(lines, i, trimmed[1:])
 			if err != nil {
 				return nil, err
 			}
 			i = end
 		case strings.HasPrefix(trimmed, "'"):
-			j := strings.IndexByte(trimmed[1:], '\'')
-			if j < 0 {
-				return nil, &ParseError{start, "missing closing single quote"}
+			e.Value, rest, end, err = singleQuoted(lines, i, trimmed[1:])
+			if err != nil {
+				return nil, err
 			}
-			e.Value, rest = trimmed[1:j+1], trimmed[j+2:]
+			i = end
 		default:
 			e.Value, e.Comment = splitComment(raw)
 		}
@@ -99,6 +100,27 @@ func Parse(src string) ([]Entry, error) {
 		entries = append(entries, e)
 	}
 	return entries, nil
+}
+
+// singleQuoted reads a single-quoted value that starts on lines[i] with s
+// (the text after the opening quote). The text is taken literally, including
+// any line breaks. It returns the same values as doubleQuoted.
+func singleQuoted(lines []string, i int, s string) (value, rest string, end int, err error) {
+	start := i + 1
+	var b strings.Builder
+	for {
+		if j := strings.IndexByte(s, '\''); j >= 0 {
+			b.WriteString(s[:j])
+			return b.String(), s[j+1:], i, nil
+		}
+		b.WriteString(s)
+		i++
+		if i >= len(lines) {
+			return "", "", 0, &ParseError{start, "missing closing single quote"}
+		}
+		b.WriteByte('\n')
+		s = lines[i]
+	}
 }
 
 // doubleQuoted reads a double-quoted value that starts on lines[i] with s

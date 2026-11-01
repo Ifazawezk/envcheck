@@ -110,7 +110,8 @@ A comment that is not made only of hint words, such as `# ask the ops team for t
 - full-line `#` comments and blank lines
 - inline comments after unquoted values, like `PORT=8080 # the port`. The `#` needs a space before it, so `COLOR=#fff` and `PASS=abc#123` keep the `#`
 - single quotes, taken literally: `'no \n escapes here'`
-- double quotes with `\n`, `\r`, `\t`, `\"`, `\\` and `\$` escapes. They can span several lines, which is handy for private keys and certificates
+- double quotes with `\n`, `\r`, `\t`, `\"`, `\\` and `\$` escapes
+- both kinds of quotes can span several lines, which is handy for private keys and certificates
 - Windows line endings and a UTF-8 byte order mark
 
 Keys can contain letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded; the text is checked as written.
