@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Severity is how serious an issue is. Only errors make envcheck fail.
 type Severity string
@@ -32,7 +35,7 @@ type Options struct {
 // Check compares the entries of a .env file with those of .env.example.
 // When a key is set more than once the last assignment is the one checked,
 // since that is the value most loaders end up using. Values never appear in
-// issues unmasked.
+// issues unmasked, and neither do names that look like values.
 // Issues in the .env file come first, in line order, then issues that point
 // at the example (duplicates and keys missing from .env), also in line order.
 func Check(env, example []Entry, opt Options) []Issue {
@@ -45,8 +48,12 @@ func Check(env, example []Entry, opt Options) []Issue {
 
 	firstLine := map[string]int{}
 	for _, e := range env {
+		shown := e
+		if _, known := want[e.Key]; !known && !looksLikeName(e.Key) {
+			shown.Key = Mask(e.Key)
+		}
 		if line, ok := firstLine[e.Key]; ok {
-			add(SevError, "duplicate", e, opt.EnvPath, fmt.Sprintf("%s is set more than once (first on line %d)", e.Key, line))
+			add(SevError, "duplicate", shown, opt.EnvPath, fmt.Sprintf("%s is set more than once (first on line %d)", shown.Key, line))
 		} else {
 			firstLine[e.Key] = e.Line
 		}
@@ -59,7 +66,11 @@ func Check(env, example []Entry, opt Options) []Issue {
 			if opt.Strict {
 				sev = SevError
 			}
-			add(sev, "extra", e, opt.EnvPath, fmt.Sprintf("%s is not in %s", e.Key, opt.ExamplePath))
+			msg := fmt.Sprintf("%s is not in %s", shown.Key, opt.ExamplePath)
+			if shown.Key != e.Key {
+				msg += " (name hidden, this line looks like a pasted secret)"
+			}
+			add(sev, "extra", shown, opt.EnvPath, msg)
 			continue
 		}
 		h := ParseHint(spec.Comment)
@@ -114,6 +125,25 @@ func Mask(v string) string {
 		return "****"
 	}
 	return string(r[:2]) + "****"
+}
+
+// looksLikeName tells a real variable name from a secret that only parses as
+// one. A base64 token pasted on its own line, like dGhpc3Rva2Vu==, is a valid
+// KEY=value line to the parser, so printing its "name" would print the secret.
+// Long names that mix case, or that have digits but no underscore, are treated
+// as secrets. Getting this wrong for a real name only hides part of a warning,
+// while getting it wrong for a secret puts it in a CI log, so it leans to hiding.
+func looksLikeName(k string) bool {
+	if len(k) < 12 {
+		return true
+	}
+	lower := strings.ContainsAny(k, "abcdefghijklmnopqrstuvwxyz")
+	upper := strings.ContainsAny(k, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	digit := strings.ContainsAny(k, "0123456789")
+	if lower && upper {
+		return false
+	}
+	return !digit || strings.Contains(k, "_")
 }
 
 func lastByKey(entries []Entry) map[string]Entry {

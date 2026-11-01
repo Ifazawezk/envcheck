@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -107,6 +108,31 @@ func TestRunJSON(t *testing.T) {
 		}
 		if stderr.Len() > 0 {
 			t.Errorf("%v: unexpected stderr %q", tt.args, stderr.String())
+		}
+	}
+}
+
+// A secret pasted on its own line parses as a key, and must stay out of the
+// output in every mode, while real names on nearby lines stay readable.
+func TestRunNeverPrintsPastedSecrets(t *testing.T) {
+	tokens := []string{
+		"klmnopqrstUVWXYZ0123456789abcd",
+		"dGhpc2lzYXZlcnlzZWNyZXR0b2tlbjEyMzQ1",
+		"JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+		"deadbeef00112233445566778899aabb",
+	}
+	args := []string{"-env", "testdata/pasted-secret.env", "-example", "testdata/app.env.example"}
+	for _, mode := range [][]string{nil, {"-json"}, {"-strict"}, {"-quiet"}, {"-strict", "-quiet", "-json"}} {
+		var out bytes.Buffer
+		run(append(mode, args...), &out, &out)
+		for _, token := range tokens {
+			if strings.Contains(out.String(), token) {
+				t.Errorf("%v: output contains %s:\n%s", mode, token, out.String())
+			}
+		}
+		warningsHidden := slices.Equal(mode, []string{"-quiet"})
+		if !warningsHidden && !strings.Contains(out.String(), "OLD_FLAG") {
+			t.Errorf("%v: a real extra key should still be named:\n%s", mode, out.String())
 		}
 	}
 }

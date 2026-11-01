@@ -119,6 +119,14 @@ Keys can contain letters, digits and underscores and can't start with a digit. V
 
 The output contains key names, file names and line numbers, never values. When a value fails a type check it is shown masked: values shorter than 8 characters become `****`, and longer ones keep only their first two characters, like `sk****`. The number of stars is always the same, so the length isn't given away either. Syntax errors don't echo the offending line, in case a secret was pasted on a line of its own.
 
+A secret on its own line can also look like a key: `dGhpc3Rva2Vu==` is valid `KEY=value` syntax. So a name that isn't in `.env.example` is masked in the same way if it is at least 12 characters long and either mixes upper and lower case or has digits but no underscore:
+
+```
+.env:6: warning: dG**** is not in .env.example (name hidden, this line looks like a pasted secret)
+```
+
+Names like `DATABASE_URL`, `http_proxy` and `S3_BUCKET_NAME_2` are shown as usual, and so is any name the example lists. This is a check on the shape of the name, so it can't catch everything: a short token, or one that is all one case with no digits, is still printed as a name. Rotate any secret that has reached a log.
+
 ## JSON output
 
 `-json` prints the same result as one object. This is the example above after most of the problems were fixed:
