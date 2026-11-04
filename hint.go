@@ -14,6 +14,8 @@ import (
 //	DEBUG=false # bool
 //	API_URL= # url
 //	ADMIN_EMAIL= # email
+//	SAMPLE_RATE=0.25 # number
+//	APP_NAME= # string
 //	LOG_LEVEL=info # one of: debug,info,warn,error
 //	SENTRY_DSN= # optional url
 //
@@ -22,7 +24,7 @@ import (
 // "required" is accepted too, but changes nothing: keys are required anyway.
 type Hint struct {
 	Optional bool
-	Type     string   // "", "int", "bool", "url" or "email"
+	Type     string   // "", "string", "int", "number", "bool", "url" or "email"
 	OneOf    []string // allowed values, compared exactly
 }
 
@@ -68,6 +70,8 @@ var (
 	oneOfWord = regexp.MustCompile(`(?i)one of:`)
 	typeWords = map[string]string{
 		"int": "int", "integer": "int",
+		"number": "number", "float": "number",
+		"string": "string",
 		"bool": "bool", "boolean": "bool",
 		"url": "url", "email": "email",
 	}
@@ -87,6 +91,8 @@ func (h Hint) Valid(v string) bool {
 	case "int":
 		_, err := strconv.ParseInt(v, 10, 64)
 		return err == nil
+	case "number":
+		return decimal.MatchString(v)
 	case "bool":
 		switch strings.ToLower(v) {
 		case "true", "false", "1", "0", "yes", "no", "on", "off":
@@ -94,13 +100,39 @@ func (h Hint) Valid(v string) bool {
 		}
 		return false
 	case "url":
-		u, err := url.Parse(v)
-		return err == nil && u.Scheme != "" && u.Host != ""
+		return validURL(v)
 	case "email":
 		a, err := mail.ParseAddress(v)
 		return err == nil && a.Address == v
 	}
 	return true
+}
+
+// Web URLs need a host. Other schemes may leave it out, as in sqlite:///app.db.
+var webSchemes = map[string]bool{"http": true, "https": true, "ws": true, "wss": true, "ftp": true}
+
+// decimal is a number as written in config: 3, -0.5, .25 or 1e-3, but not NaN,
+// Inf or hex, which strconv.ParseFloat would also accept.
+var decimal = regexp.MustCompile(`^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$`)
+
+var driverName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*$`)
+
+// validURL accepts an absolute URL with a host, a scheme:///path with no host
+// (files, sockets, SQLite), and jdbc:driver:... connection strings, whose
+// format after the driver name depends on the driver.
+func validURL(v string) bool {
+	if rest, ok := strings.CutPrefix(v, "jdbc:"); ok {
+		driver, tail, ok := strings.Cut(rest, ":")
+		return ok && driverName.MatchString(driver) && tail != ""
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme == "" {
+		return false
+	}
+	if u.Host != "" {
+		return true
+	}
+	return !webSchemes[u.Scheme] && strings.HasPrefix(v[len(u.Scheme):], ":///") && len(u.Path) > 1
 }
 
 // Want describes what the hint expects, for use in messages.
@@ -111,6 +143,8 @@ func (h Hint) Want() string {
 	switch h.Type {
 	case "int":
 		return "a whole number"
+	case "number":
+		return "a number like 0.25 or 3"
 	case "bool":
 		return "a boolean like true or false"
 	case "url":

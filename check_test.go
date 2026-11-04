@@ -40,8 +40,18 @@ func TestCheck(t *testing.T) {
 		{"empty files", "", "", nil},
 		{"optional key may be missing", "A=1", "A=\nB= # optional", nil},
 		{"optional key may be empty", "A=1\nB=", "A=\nB= # optional url", nil},
+		{"optional string may be empty", "A=1\nB=", "A=\nB= # optional string", nil},
+		{"number hint", "RATE=0.25\nRATIO=1/2", "RATE= # number\nRATIO= # number", []string{"error invalid RATIO env:2"}},
 		{"optional value is still checked", "B=not-a-url", "B= # optional url", []string{"error invalid B env:1"}},
 		{"empty required value is not type checked", "PORT=", "PORT=8080 # int", []string{"error empty PORT env:1"}},
+		{
+			"values that use another variable are not type checked",
+			"DB=postgres://${DB_USER}:${DB_PASS}@db/app\nPORT=${APP_PORT:-8080}\nLEVEL=\"${LOG_LEVEL}\"",
+			"DB= # url\nPORT= # int\nLEVEL= # one of: debug,info",
+			nil,
+		},
+		{"single quotes keep ${VAR} as written", "PORT='${APP_PORT}'", "PORT= # int", []string{"error invalid PORT env:1"}},
+		{"a lone $ is not a variable", "PORT=80$", "PORT= # int", []string{"error invalid PORT env:1"}},
 		{
 			"other ways of writing a hint still check the value",
 			"A=x\nB=z\nC=x\nD=maybe",

@@ -13,6 +13,7 @@ type Entry struct {
 	Value   string
 	Comment string // text of a trailing "# ..." comment, if any
 	Line    int    // line the assignment starts on
+	Literal bool   // single quoted, so loaders don't expand ${VAR} in it
 }
 
 // ParseError reports a syntax error and the line it was found on.
@@ -89,6 +90,7 @@ func Parse(src string) ([]Entry, error) {
 			}
 			i = end
 		case strings.HasPrefix(trimmed, "'"):
+			e.Literal = true
 			e.Value, rest, end, err = singleQuoted(lines, i, trimmed[1:])
 			if err != nil {
 				return nil, err
