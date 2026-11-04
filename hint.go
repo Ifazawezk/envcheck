@@ -94,13 +94,35 @@ func (h Hint) Valid(v string) bool {
 		}
 		return false
 	case "url":
-		u, err := url.Parse(v)
-		return err == nil && u.Scheme != "" && u.Host != ""
+		return validURL(v)
 	case "email":
 		a, err := mail.ParseAddress(v)
 		return err == nil && a.Address == v
 	}
 	return true
+}
+
+// Web URLs need a host. Other schemes may leave it out, as in sqlite:///app.db.
+var webSchemes = map[string]bool{"http": true, "https": true, "ws": true, "wss": true, "ftp": true}
+
+var driverName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*$`)
+
+// validURL accepts an absolute URL with a host, a scheme:///path with no host
+// (files, sockets, SQLite), and jdbc:driver:... connection strings, whose
+// format after the driver name depends on the driver.
+func validURL(v string) bool {
+	if rest, ok := strings.CutPrefix(v, "jdbc:"); ok {
+		driver, tail, ok := strings.Cut(rest, ":")
+		return ok && driverName.MatchString(driver) && tail != ""
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme == "" {
+		return false
+	}
+	if u.Host != "" {
+		return true
+	}
+	return !webSchemes[u.Scheme] && strings.HasPrefix(v[len(u.Scheme):], ":///") && len(u.Path) > 1
 }
 
 // Want describes what the hint expects, for use in messages.
