@@ -1,8 +1,14 @@
 # envcheck
 
-Checks a `.env` file against `.env.example` before you deploy. It tells you which keys are missing, which are empty, which are set twice and which values don't match the type you expect. It never prints the values themselves, so the output is safe to keep in CI logs.
+Checks a `.env` file against `.env.example` before you deploy: missing keys, empty values, keys set twice, and values of the wrong type. It never prints the values, so the output is safe to keep in CI logs.
 
-One small binary, standard library only.
+It's one small binary that uses only the Go standard library.
+
+## Install
+
+```bash
+go install github.com/Ifazawezk/envcheck@latest
+```
 
 ## Example
 
@@ -19,7 +25,7 @@ DEBUG=false # bool
 SENTRY_DSN= # optional url
 ```
 
-And here is a `.env` that has drifted from it:
+Here is a `.env` that has drifted from it:
 
 ```bash
 APP_ENV=prod
@@ -41,13 +47,7 @@ $ envcheck
 4 errors, 1 warning
 ```
 
-Each problem is printed as `file:line: severity: message` on stdout, so editors and CI log viewers can jump to the line. The summary goes to stderr. `SENTRY_DSN` is not reported because it is marked optional.
-
-## Install
-
-```bash
-go install github.com/Ifazawezk/envcheck@latest
-```
+Problems go to stdout as `file:line: severity: message`, so editors and CI log viewers can jump to the line. The summary goes to stderr. `SENTRY_DSN` isn't reported because it's marked optional.
 
 ## Usage
 
@@ -67,13 +67,11 @@ envcheck -json > envcheck.json             # machine-readable result
 | `-json` | off | print the result as JSON |
 | `-quiet` | off | print errors only: no warnings and no summary line |
 
-Exit codes:
+The exit code is `0` when there are no errors (warnings alone don't fail), `1` when there is at least one error, and `2` when a file can't be read or has a syntax error, or the flags are wrong.
 
-- `0` when there are no errors (warnings alone don't fail)
-- `1` when there is at least one error
-- `2` when a file can't be read or has a syntax error, or the flags are wrong
+`-json` prints one object with `env`, `example`, `ok`, `errors`, `warnings` and an `issues` array. Each issue has `severity`, `kind` (`missing`, `extra`, `empty`, `duplicate` or `invalid`), `key`, `file`, `line` and `message`, plus the masked `value` for invalid values. With `-quiet`, warnings are left out of `issues` but still counted in `warnings`.
 
-## What it checks
+## What counts as a problem
 
 | Problem | Severity |
 |---|---|
@@ -83,11 +81,11 @@ Exit codes:
 | key is set more than once in either file | error |
 | value doesn't match the type hint | error |
 
-When a key is set twice, the last value is the one that gets checked, since that is what most loaders use. It is still reported as an error because not every loader agrees on which one wins.
+For a key set twice, the last value is the one checked, since that's what most loaders use. It's still an error because loaders don't all agree on which one wins.
 
 ## Type hints
 
-A hint is a comment at the end of a line in `.env.example`. Leave a space before the `#`.
+A hint is a comment at the end of a line in `.env.example`, with a space before the `#`.
 
 | Hint | Accepts |
 |---|---|
@@ -99,69 +97,37 @@ A hint is a comment at the end of a line in `.env.example`. Leave a space before
 | `# optional` | the key may be missing or empty |
 | `# required` | changes nothing, since keys are required unless marked optional, but it can sit next to a type: `# required int` |
 
-`optional` can be combined with a type: `# optional url`, `# int, optional` or `# optional, one of: eu,us`. Put `optional` before `one of:`, because everything after the colon is read as the list of allowed values. Hint words can be in any case.
+`optional` combines with a type: `# optional url`, `# int, optional` or `# optional, one of: eu,us`. Put it before `one of:`, because everything after the colon is read as the list of allowed values. Hint words can be in any case. Empty values are never type checked: a required key is reported as empty and an optional one passes. A comment that isn't made only of hint words, such as `# ask the ops team for this`, is ignored.
 
-An empty value is never type checked. If the key is required it is reported as empty, and if it is optional it is fine.
-
-A comment that is not made only of hint words, such as `# ask the ops team for this`, is just a comment and is ignored.
-
-## Supported .env syntax
+## .env syntax
 
 - `KEY=value`, with or without spaces around `=`, and an optional `export ` in front
 - full-line `#` comments and blank lines
 - inline comments after unquoted values, like `PORT=8080 # the port`. The `#` needs a space before it, so `COLOR=#fff` and `PASS=abc#123` keep the `#`
 - single quotes, taken literally: `'no \n escapes here'`
 - double quotes with `\n`, `\r`, `\t`, `\"`, `\\` and `\$` escapes
-- both kinds of quotes can span several lines, which is handy for private keys and certificates
+- values in either kind of quotes can span several lines, for private keys and certificates
 - Windows line endings and a UTF-8 byte order mark
 
-Files must be UTF-8. UTF-16, which `>` and `>>` write in Windows PowerShell 5.1, is reported as a syntax error on the line where it starts, because most loaders can't read it either.
+Keys are letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded; the text is checked as written.
 
-Keys can contain letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded; the text is checked as written.
+Files must be UTF-8. Windows PowerShell 5.1 writes UTF-16 with `>` and `>>`, and envcheck reports that as a syntax error on the line where it starts, because most loaders can't read it either.
 
-## Values are never printed
+## How values are hidden
 
-The output contains key names, file names and line numbers, never values. When a value fails a type check it is shown masked: values shorter than 8 characters become `****`, and longer ones keep only their first two characters, like `sk****`. The number of stars is always the same, so the length isn't given away either. Syntax errors don't echo the offending line, in case a secret was pasted on a line of its own.
+Output has key names, file names and line numbers, never values. A value that fails a type check is masked: under 8 characters it becomes `****`, and longer ones keep only their first two characters, like `sk****`. The number of stars is always the same, so the length doesn't leak. Syntax errors don't echo the line, in case a secret was pasted on a line of its own.
 
-A secret on its own line can also look like a key: `dGhpc3Rva2Vu==` is valid `KEY=value` syntax. So a name that isn't in `.env.example` is masked in the same way if it is at least 12 characters long and either mixes upper and lower case or has digits but no underscore:
+Such a pasted secret can parse as a key, since `dGhpc3Rva2Vu==` is valid `KEY=value` syntax. So a name that isn't in `.env.example` is masked too if it's at least 12 characters long and either mixes upper and lower case or has digits but no underscore:
 
 ```
 .env:6: warning: dG**** is not in .env.example (name hidden, this line looks like a pasted secret)
 ```
 
-Names like `DATABASE_URL`, `http_proxy` and `S3_BUCKET_NAME_2` are shown as usual, and so is any name the example lists. This is a check on the shape of the name, so it can't catch everything: a short token, or one that is all one case with no digits, is still printed as a name. Rotate any secret that has reached a log.
+Names like `DATABASE_URL`, `http_proxy` and `S3_BUCKET_NAME_2`, and any name the example lists, are shown as usual. The check only looks at the shape of the name, so a short token, or one in a single case with no digits, still gets printed. Rotate any secret that has reached a log.
 
-## JSON output
+## In CI
 
-`-json` prints the same result as one object. This is the example above after most of the problems were fixed:
-
-```
-$ envcheck -json
-{
-  "env": ".env",
-  "example": ".env.example",
-  "ok": false,
-  "errors": 1,
-  "warnings": 0,
-  "issues": [
-    {
-      "severity": "error",
-      "kind": "invalid",
-      "key": "APP_ENV",
-      "file": ".env",
-      "line": 1,
-      "message": "APP_ENV should be one of development, staging, production (got \"****\")",
-      "value": "****"
-    }
-  ]
-}
-```
-
-`kind` is one of `missing`, `extra`, `empty`, `duplicate` or `invalid`. With `-quiet`, warnings are left out of `issues` but still counted in `warnings`.
-
-## Using it in CI
-
-In a GitHub Actions job, where the production `.env` is stored as a secret:
+A GitHub Actions job, with the production `.env` stored as a secret:
 
 ```yaml
 - uses: actions/setup-go@v5
