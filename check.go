@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -31,6 +32,9 @@ type Options struct {
 	ExamplePath string
 	Strict      bool
 }
+
+// varRef matches ${NAME} and forms like ${NAME:-default}.
+var varRef = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*(?:[:?+=-][^}]*)?\}`)
 
 // Check compares the entries of a .env file with those of .env.example.
 // When a key is set more than once the last assignment is the one checked,
@@ -79,6 +83,8 @@ func Check(env, example []Entry, opt Options) []Issue {
 			if !h.Optional {
 				add(SevError, "empty", e, opt.EnvPath, e.Key+" is empty")
 			}
+		case !e.Literal && varRef.MatchString(e.Value):
+			// Loaders expand ${VAR} later, so the final value isn't known here.
 		case !h.Valid(e.Value):
 			masked := Mask(e.Value)
 			add(SevError, "invalid", e, opt.EnvPath, fmt.Sprintf("%s should be %s (got %q)", e.Key, h.Want(), masked))

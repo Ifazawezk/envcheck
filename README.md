@@ -109,7 +109,7 @@ A hint is a comment at the end of a line in `.env.example`, with a space before 
 - values in either kind of quotes can span several lines, for private keys and certificates
 - Windows line endings and a UTF-8 byte order mark
 
-Keys are letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded; the text is checked as written.
+Keys are letters, digits and underscores and can't start with a digit. Variables like `${HOME}` are not expanded, so a value that uses one, such as `postgres://${DB_USER}@db/app` or `${PORT:-8080}`, skips the type check. Its real value is only known once the loader fills it in. Loaders leave single-quoted values alone, so those are checked as written.
 
 Files must be UTF-8. Windows PowerShell 5.1 writes UTF-16 with `>` and `>>`, and envcheck reports that as a syntax error on the line where it starts, because most loaders can't read it either.
 
