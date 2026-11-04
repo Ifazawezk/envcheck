@@ -90,6 +90,8 @@ A hint is a comment at the end of a line in `.env.example`, with a space before 
 | Hint | Accepts |
 |---|---|
 | `# int` or `# integer` | whole numbers like `8080` or `-1` |
+| `# number` or `# float` | numbers like `3`, `-0.5` or `1e-3` |
+| `# string` | any text, which is mostly useful as `# optional string` |
 | `# bool` or `# boolean` | `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`, in any case |
 | `# url` | an absolute URL with a scheme and host, like `https://api.example.com` or `postgres://user:pass@db:5432/app`. Files and sockets can leave the host out, as in `sqlite:///data/app.db` or `unix:///var/run/docker.sock`, and `jdbc:` URLs work too |
 | `# email` | a plain address like `ops@example.com` |

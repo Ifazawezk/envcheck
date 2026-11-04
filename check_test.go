@@ -40,6 +40,8 @@ func TestCheck(t *testing.T) {
 		{"empty files", "", "", nil},
 		{"optional key may be missing", "A=1", "A=\nB= # optional", nil},
 		{"optional key may be empty", "A=1\nB=", "A=\nB= # optional url", nil},
+		{"optional string may be empty", "A=1\nB=", "A=\nB= # optional string", nil},
+		{"number hint", "RATE=0.25\nRATIO=1/2", "RATE= # number\nRATIO= # number", []string{"error invalid RATIO env:2"}},
 		{"optional value is still checked", "B=not-a-url", "B= # optional url", []string{"error invalid B env:1"}},
 		{"empty required value is not type checked", "PORT=", "PORT=8080 # int", []string{"error empty PORT env:1"}},
 		{
